@@ -1,3 +1,14 @@
+# LAB1 exclude
+LAB1/LIBTXTBUF
+LAB1/ROTTEXT
+LAB1/zadanie.pdf
+
+# LAB2 exclude
+LAB2/01/01.txt
+LAB2/02/02.txt
+LAB2/04
+LAB2/03
+
 # Prerequisites
 *.d
 
