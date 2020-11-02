@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
     
     int fd = open(
         path, 
-        O_WRONLY | O_CREAT, 
+        O_WRONLY | O_CREAT | O_EXCL, 
         S_IWGRP | 
         S_IWUSR |
         S_IWOTH |
@@ -67,8 +67,17 @@ int main(int argc, char* argv[])
     }
     
     lseek(fd, size, SEEK_SET);
-    write(fd, 0, 1);
-    //ftruncate(fd, size);
+    //write(fd, 0, 0);
+    ftruncate(fd, size);
+    struct stat st = {0};
+    
+    stat(path, &st);
+    printf("size/bytes: %ld\n", st.st_size); /* 'official' size in bytes */
+    printf("block size/bytes: %ld\n", st.st_blksize);
+    printf("blocks: %ld\n", st.st_blocks); /* number of blocks actually on disk */
+    if (st.st_size > (st.st_blksize * st.st_blocks))  
+       printf("file is (at least partially) a sparse file\n");
+
     close(fd);
     return 0;
 }
