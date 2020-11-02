@@ -9,6 +9,9 @@ LAB2/02/02.txt
 LAB2/04
 LAB2/03
 
+# LAB3 exclude
+LAB3/dwa_zadania.pdf
+
 # Prerequisites
 *.d
 
@@ -61,3 +64,4 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+LAB3/dwa_zadania.pdf
