@@ -69,6 +69,7 @@ int main(int argc, char* argv[])
     lseek(fd, size, SEEK_SET);
     //write(fd, 0, 0);
     ftruncate(fd, size);
+    close(fd);
     struct stat st = {0};
     
     stat(path, &st);
@@ -78,6 +79,5 @@ int main(int argc, char* argv[])
     if (st.st_size > (st.st_blksize * st.st_blocks))  
        printf("file is (at least partially) a sparse file\n");
 
-    close(fd);
     return 0;
 }

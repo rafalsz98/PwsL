@@ -13,12 +13,7 @@ int StringToInt(char *string)
 {
     char *endptr = NULL;
     int val = strtol(string, &endptr, 0);
-    if ((errno == ERANGE && val == LONG_MAX) 
-        || val == LONG_MIN 
-        || (errno != 0 && val == 0)
-        || endptr == string 
-        || *endptr != 0
-        )
+    if ((errno == ERANGE && val == LONG_MAX) || val == LONG_MIN || (errno != 0 && val == 0) || endptr == string || *endptr != 0)
     {
         printf("Wrong parameter\n");
         exit(EXIT_FAILURE);
@@ -26,7 +21,7 @@ int StringToInt(char *string)
     return val;
 }
 
-off_t GetRandomOffset(size_t max, off_t* arr, int sizeOfArr, int i)
+off_t GetRandomOffset(size_t max, off_t *arr, int sizeOfArr, int i)
 {
     while (1)
     {
@@ -45,10 +40,10 @@ off_t GetRandomOffset(size_t max, off_t* arr, int sizeOfArr, int i)
     }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     char c;
-    char* path;
+    char *path;
     srand(time(NULL));
     int wasS = 0, wasF = 0, argErr = 0;
     int format = 0; // 0 - liczba, 1 - tekst
@@ -92,6 +87,7 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
+    int size = 0;
     if (!format && (argc - optind) > st.st_size)
     {
         printf("Not enough space in file\n");
@@ -99,11 +95,10 @@ int main(int argc, char* argv[])
     }
     else if (format)
     {
-        int size = 0;
         for (int i = optind; i < argc; i++)
         {
             size += strlen(argv[i]);
-        }       
+        }
         if (size > st.st_size)
         {
             printf("Not enough space in file\n");
@@ -111,14 +106,17 @@ int main(int argc, char* argv[])
         }
     }
 
-    int sizeOfArr = argc - optind;
-    off_t* arr = (off_t*)calloc(sizeof(off_t), sizeOfArr);
+   // int sizeOfArr = argc - optind;
+   // off_t *arr = (off_t *)calloc(sizeof(off_t), sizeOfArr);
 
-    for (int i = optind; i < argc; i++)
+    if (!format)
     {
-        lseek(fd, GetRandomOffset(st.st_size, arr, sizeOfArr, i), SEEK_SET);
-        if (!format)
+        size_t sizeOfArr = argc - optind;
+        off_t *arr = (off_t*)calloc(sizeof(off_t), sizeOfArr);
+        size_t index = 0;
+        for (int i = optind; i < argc; i++)
         {
+            lseek(fd, GetRandomOffset(st.st_size, arr, sizeOfArr, index++), SEEK_SET);
             unsigned char val = StringToInt(argv[i]);
             if (write(fd, &val, sizeof(val)) <= 0)
             {
@@ -126,26 +124,27 @@ int main(int argc, char* argv[])
                 exit(EXIT_FAILURE);
             }
         }
-        else
+        free(arr);
+    }
+    else
+    {
+        size_t sizeOfArr = size;
+        off_t *arr = (off_t*)calloc(sizeof(off_t), sizeOfArr);
+        size_t index = 0;
+        for (int i = optind; i < argc; i++)
         {
             for (int j = 0; j < strlen(argv[i]); j++)
             {
+                lseek(fd, GetRandomOffset(st.st_size, arr, sizeOfArr, index++), SEEK_SET);
                 unsigned char val = argv[i][j];
                 if (write(fd, &val, sizeof(val)) <= 0)
                 {
                     perror("write");
                     exit(EXIT_FAILURE);
                 }
-                lseek(fd, GetRandomOffset(st.st_size, arr, sizeOfArr, i), SEEK_SET);
             }
-        }
+        }        
+        free(arr);
     }
-    for (int i = 0; i < sizeOfArr; i++)
-    {
-        printf("%ld  ", arr[i]);
-    }
-    printf("\n");
-
-    free(arr);
     return 0;
 }
