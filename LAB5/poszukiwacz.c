@@ -61,15 +61,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     processName = argv[0];
-    srand(getpid());
-
-    // // Generate process name
-    // char processName[MAX_STRING] = {0};
-    // char randomChars[6] = {0};
-    // for (int i = 0; i < 5; i++) {
-    //     randomChars[i] = rand() % 26 + 65;
-    // }
-    // sprintf(processName, "%s%s", processNameBeginning, randomChars);
 
     // Block until parent start the race
     read(4, NULL, 1);
