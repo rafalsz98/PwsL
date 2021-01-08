@@ -16,6 +16,8 @@ typedef struct {
 
 volatile struct timespec startTime;
 volatile SignalInfo signalInfo;
+const double delta1 = 1.0;
+const double delta2 = 1.3;
 
 void handler1(int sig, siginfo_t *siginfo, void *ucontext) {
     clock_gettime(CLOCK_MONOTONIC, &startTime);
@@ -42,10 +44,18 @@ int main() {
 
     // sleep time init
     struct timespec ts = {0, 5 * 1e8};
+    int deltasSec = delta1;
+    int deltasNsec = (delta1 - deltasSec) * 1e9;
+    struct timespec delta1Ts = {deltasSec, deltasNsec};
+    deltasSec = delta2;
+    deltasNsec = (delta2 - deltasSec) * 1e9;
+    struct timespec delta2Ts = {deltasSec, deltasNsec};
+
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "EndlessLoop"
     for (;;) {
         if (pause() == -1 && errno == EINTR) {
+            nanosleep(&delta1Ts, NULL);
             sigprocmask(SIG_SETMASK, &mask, NULL);
             errno = 0;
             time_t sec = 0, nsec = 0;
@@ -57,7 +67,6 @@ int main() {
             nsecBytes[1] = codedBytes[2];
             nsecBytes[2] = codedBytes[3];
             double delta = sec + (startTime.tv_nsec - nsec) / 1e9;
-
 
             printf("Start: %ld[s] %ld[ns]\t", startTime.tv_sec, startTime.tv_nsec);
             printf("PID: %d\tUID: %d\tCode: %d\tDelta time: %.9f\t", signalInfo.pid, signalInfo.uid, signalInfo.code, delta);
