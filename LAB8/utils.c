@@ -82,6 +82,7 @@ int setupTimer(int signal, timer_t *timerid) {
     sigevent.sigev_notify = SIGEV_SIGNAL;
     sigevent.sigev_signo = signal;
     ERROR_CHECK(timer_create(CLOCK_MONOTONIC, &sigevent, timerid));
+    return 0;
 }
 
 int launchTimer(timer_t timerid, double interval, int intervalTimes, int oneTimer) {
@@ -96,8 +97,8 @@ int launchTimer(timer_t timerid, double interval, int intervalTimes, int oneTime
         its.it_interval.tv_sec = 0;
         its.it_interval.tv_nsec = 0;
     }
-    //printf("%d  %d\n", its.it_interval.tv_sec, its.it_interval.tv_nsec);
     ERROR_CHECK(timer_settime(timerid, 0, &its, NULL));
+    return 0;
 }
 
 int setupSignalHandler(int signal, void (*handler)(int, siginfo_t*, void *)) {
@@ -107,6 +108,7 @@ int setupSignalHandler(int signal, void (*handler)(int, siginfo_t*, void *)) {
     sa.sa_sigaction = handler;
 
     ERROR_CHECK(sigaction(signal, &sa, NULL));
+    return 0;
 }
 
 void alarmHandler(int sig, siginfo_t *siginfo, void *ucontext) {
