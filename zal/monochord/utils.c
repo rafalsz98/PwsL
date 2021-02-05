@@ -3,7 +3,8 @@
 #define ERROR_CHECK(func) if((func)==-1){return -1;}
 
 int probingStopped = 1;
-int lastSendSuccessful = 0;
+int lastSendSuccessfulPID = 0;
+int lastSendSuccessfulRT = 0;
 
 int StringToInt(char *string, int *wasErr) {
     char *endptr = NULL;
@@ -111,15 +112,24 @@ int setupSigset(sigset_t* emptySet, sigset_t* maskSet, int maskedSignal) {
 }
 
 int sendResultSignal(Commands* commands, struct timespec* startTs, timer_t probeTimer, timer_t periodTimer) {
-    if (kill(commands->pid, 0) == -1 || (commands->rt < SIGRTMIN || commands->rt > SIGRTMAX)) {
-        // no permissions, stop timers
-        lastSendSuccessful = 0;
-        printf("stopped sim\n");
+    int wasErr = 0;
+    if (kill(commands->pid, 0) == -1) {
+        wasErr = 1;
+        lastSendSuccessfulPID = 0;
+    }
+    if (commands->rt < SIGRTMIN || commands->rt > SIGRTMAX) {
+        wasErr = 1;
+        lastSendSuccessfulRT = 0;
+    }
+
+    if (wasErr) {
+        printf("Stopped simulation\n");
         stopTimer(probeTimer);
         stopTimer(periodTimer);
         probingStopped = 1;
         return 0;
     }
+
     struct timespec tsNow = {0};
     clock_gettime(CLOCK_MONOTONIC, &tsNow);
     float x = tsNow.tv_sec - startTs->tv_sec + (tsNow.tv_nsec - startTs->tv_nsec) / 1e9;
@@ -128,7 +138,8 @@ int sendResultSignal(Commands* commands, struct timespec* startTs, timer_t probe
     printf("val: %f\n", y);
     memcpy(&sigval, &y, sizeof(float));
     ERROR_CHECK(sigqueue(commands->pid, commands->rt, sigval));
-    lastSendSuccessful = 1;
+    lastSendSuccessfulPID = 1;
+    lastSendSuccessfulRT = 1;
     return 0;
 }
 
@@ -220,9 +231,7 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
                 (commands->period > 0 && isActive(periodTimer)) ||
                 commands->period == 0
             ) {
-                long seconds = value;
-                long nanoseconds = (value - seconds) * 1e9;
-                launchTimer(probeTimer, seconds, nanoseconds, 0);
+                resetTimer(probeTimer, value, 0);
             }
         }
         else if (!strcmp(command, "period")) {
@@ -251,11 +260,10 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
             short value = (short)StringToInt(stringValue, &err);
             if (err || value <= 0) continue;
             commands->pid = value;
-            if (!lastSendSuccessful) {
+            if (!lastSendSuccessfulPID) {
                 if (commands->period >= 0) {
-                    if (commands->period != 0) {
+                    if (commands->period != 0)
                         resetTimer(periodTimer, commands->period, 1);
-                    }
                     resetTimer(probeTimer, commands->probe, 0);
                 }
             }
@@ -263,8 +271,15 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
         else if (!strcmp(command, "rt")) {
             int err = 0;
             short value = (short)StringToInt(stringValue, &err);
-            if (err || value < 0 || value > (SIGRTMAX - SIGRTMIN)) continue;
+            if (err) continue;
             commands->rt = value;
+            if (!lastSendSuccessfulRT) {
+                if (commands->period >= 0) {
+                    if (commands->period != 0)
+                        resetTimer(periodTimer, commands->period, 1);
+                    resetTimer(probeTimer, commands->probe, 0);
+                }
+            }
         }
     }
     if (writeRaport) {
@@ -275,15 +290,19 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
         else if (commands->period == 0) strcpy(periodAdd, "non-stop");
 
         char pidAdd[32] = {0};
-        if (lastSendSuccessful) strcpy(pidAdd, "receiver exists");
-        else strcpy(pidAdd, "receiver doesn't exist");
+        if (lastSendSuccessfulPID) strcpy(pidAdd, "exists");
+        else strcpy(pidAdd, "doesn't exist");
+
+        char rtAdd[32] = {0};
+        if (lastSendSuccessfulRT) strcpy(rtAdd, "acceptable");
+        else strcpy(rtAdd, "unacceptable");
         snprintf(message, sizeof(message) - 1, "\
 amp\t%f\n\
 freq\t%f\n\
 probe\t%f\n\
 period\t%f\t%s\n\
 pid\t%d\t%s\n\
-rt\t%d\n", commands->amp, commands->freq, commands->probe, commands->period, periodAdd, commands->pid, pidAdd, commands->rt);
+rt\t%d\t%s\n", commands->amp, commands->freq, commands->probe, commands->period, periodAdd, commands->pid, pidAdd, commands->rt, rtAdd);
         sendto(udpFd, message, sizeof(message), 0, (struct sockaddr*)&sockaddrIn, addrlen);
     }
     return 0;

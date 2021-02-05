@@ -41,7 +41,8 @@ typedef struct CommandsStruct {
 } Commands;
 
 extern int probingStopped;
-extern int lastSendSuccessful;
+extern int lastSendSuccessfulPID;
+extern int lastSendSuccessfulRT;
 
 int StringToInt(char *string, int *wasErr);
 double StringToDouble(char *string, int *wasErr);
