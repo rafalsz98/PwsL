@@ -86,16 +86,24 @@ int saveData(Data data, int currentStatus, struct timespec refTs) {
         );
     }
 
+    if (currentStatus & USING_SOURCE_ID) {
+        // Can print to file thanks to dup2
+        printf("%s: %f  [%d]\n", timestamp, data.data, data.source);
+    }
+    else {
+        data.source = 0;
+        printf("%s: %f\n", timestamp, data.data);
+    }
 
-
-    printf("%s: %f  [%d]\n", timestamp, data.data, data.source);
+    if (currentStatus & USING_BINARY) {
+        write(binFd, (void*)&data, sizeof(data));
+    }
 
     return 0;
 }
 
 int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, struct timespec *currTs, int commandSignal) {
     if (commandFlags == 0) {
-        printf("reset\n");
         resetStatusFlags(currentStatus);
         *prevTs = *currTs;
     }
@@ -113,14 +121,17 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
         int createdRefPoint = 0;
 
         if (commandFlags & TRUNCATE) {
-            printf("truncated\n");
+            errno = 0;
+            if (*currentStatus & USING_BINARY) {
+                if (ftruncate(binFd, 0) == -1 && errno != EINVAL) return -1;
+                errno = 0;
+            }
+            if (ftruncate(textFd, 0) == -1 && errno != EINVAL) return -1;
         }
         if (commandFlags & USE_SOURCE_ID) {
             *currentStatus |= USING_SOURCE_ID;
-            printf("use source id\n");
         }
         if (commandFlags & PREV_REF_POINT) {
-            printf("use prev\n");
             *currentStatus |= USING_REF_POINT;
             createdRefPoint = 1;
             if (prevTs->tv_sec != 0 || prevTs->tv_nsec != 0) {
@@ -131,7 +142,6 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
             }
         }
         if (commandFlags & NEW_REF_POINT && !createdRefPoint) {
-            printf("use new\n");
             *currentStatus |= USING_REF_POINT;
             clock_gettime(CLOCK_MONOTONIC, currTs);
         }
