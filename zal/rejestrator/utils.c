@@ -54,14 +54,41 @@ void resetStatusFlags(int* currentStatus) {
 }
 
 int saveData(Data data, int currentStatus, struct timespec refTs) {
+    char timestamp[256] = {0};
     if (currentStatus & USING_REF_POINT) {
+        struct timespec currTs = {0};
+        clock_gettime(CLOCK_MONOTONIC, &currTs);
+        struct timespec delta = {
+                .tv_sec = (currTs.tv_sec - refTs.tv_sec),
+                .tv_nsec = (currTs.tv_nsec - refTs.tv_nsec)
+        };
+        if (delta.tv_nsec < 0) {
+            delta.tv_sec -= 1;
+            delta.tv_nsec += 1e9;
+        }
         data.ts = refTs;
+
+        int hour = delta.tv_sec / 3600;
+        delta.tv_sec -= (hour * 3600);
+        int minutes = delta.tv_sec / 60;
+        delta.tv_sec -= (minutes * 60);
+        int seconds = delta.tv_sec;
+        int miliseconds = delta.tv_nsec / 1e6;
+        snprintf(timestamp, 256, "[%02d:%02d:%02d.%03d]", hour, minutes, seconds, miliseconds);
     }
     else {
         clock_gettime(CLOCK_REALTIME, &(data.ts));
+        struct tm* tm = localtime(&(data.ts.tv_sec));
+        int miliseconds = data.ts.tv_nsec / 1e6;
+        snprintf(timestamp, 256, "[%02d/%02d/%d %02d:%02d:%02d.%03d]",
+                 tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900,
+                 tm->tm_hour, tm->tm_min, tm->tm_sec, miliseconds
+        );
     }
 
-    printf("[%ld %ld]: %f  [%d]\n", data.ts.tv_sec, data.ts.tv_nsec, data.data, data.source);
+
+
+    printf("%s: %f  [%d]\n", timestamp, data.data, data.source);
 
     return 0;
 }
@@ -73,7 +100,6 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
         *prevTs = *currTs;
     }
     else if (commandFlags == 255) {
-        printf("info\n");
         union sigval sigval = {.sival_int = *currentStatus};
         sigqueue(infoPid, commandSignal, sigval);
     }
