@@ -174,7 +174,7 @@ void resetTimer(timer_t timer, float time, int isOneTime) {
 int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t periodTimer, struct timespec* ts)
 {
     struct sockaddr_in sockaddrIn = {0};
-    socklen_t addrlen;
+    socklen_t addrlen = sizeof(sockaddrIn);
     char buffer[UDP_BUFFER_SIZE] = {0};
     int size = 0;
     ERROR_CHECK(size = recvfrom(udpFd, buffer, sizeof(buffer), MSG_WAITALL, (struct sockaddr*)&sockaddrIn, &addrlen));
@@ -194,7 +194,6 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
         if (end - i >= 64 || end - i == 0) continue;
         char command[64] = {0};
         strncpy(command, recordRow + i, end - i);
-
         if(recordRow[end] == '\0') {
             if (strcmp("raport", command)) continue;
             writeRaport = 1;
