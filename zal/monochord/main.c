@@ -35,8 +35,8 @@ int main(int argc, char* argv[]) {
                 ERROR_CHECK(sendResultSignal(&commands, &ts, probeTimer, periodTimer), "sendResultSignal");
             }
             else if (signalFlag == 1) { // period timer
-                printf("end probing!\n");
-                stopTimer(probeTimer);
+                printf("Probing ended!\n");
+                ERROR_CHECK(stopTimer(probeTimer), "stopTimer");
                 probingStopped = 1;
                 periodExecution = 0;
             }
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
         else {
             // UDP socket has some command
             sigprocmask(SIG_SETMASK, &maskSet, NULL);
-            parseCommand(udpFd, &commands, probeTimer, periodTimer, &ts);
+            ERROR_CHECK(parseCommand(udpFd, &commands, probeTimer, periodTimer, &ts), "parseCommand");
             sigprocmask(SIG_SETMASK, &emptySet, NULL);
         }
 

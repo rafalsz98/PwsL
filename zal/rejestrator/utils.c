@@ -1,16 +1,16 @@
 #include "utils.h"
 
+#define ERROR_CHECK(func) if((func)==-1){return -1;}
+
 int StringToInt(char *string, int *wasErr) {
     char *endptr = NULL;
     errno = 0;
     int val = strtol(string, &endptr, 10);
-    if ((errno == ERANGE && val == LONG_MAX)
-        || val == LONG_MIN
+    if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
         || (errno != 0 && val == 0)
         || endptr == string
         || *endptr != 0
-            )
-    {
+    ) {
         *wasErr = -1;
     }
     return val;
@@ -49,8 +49,7 @@ int parseParameters(int argc, char **argv, char **pathToBinary, char **pathToTex
 }
 
 void resetStatusFlags(int* currentStatus) {
-    *currentStatus = NOT_WORKING;
-    if (binFd != -1) *currentStatus |= USING_BINARY;
+    *currentStatus = binFd == -1 ? NOT_WORKING : USING_BINARY;
 }
 
 int saveData(Data data, int currentStatus, struct timespec refTs) {
@@ -66,7 +65,7 @@ int saveData(Data data, int currentStatus, struct timespec refTs) {
             delta.tv_sec -= 1;
             delta.tv_nsec += 1e9;
         }
-        data.ts = refTs;
+        data.ts = delta;
 
         int hour = delta.tv_sec / 3600;
         delta.tv_sec -= (hour * 3600);
@@ -88,15 +87,15 @@ int saveData(Data data, int currentStatus, struct timespec refTs) {
 
     if (currentStatus & USING_SOURCE_ID) {
         // Can print to file thanks to dup2
-        printf("%s: %f  [%d]\n", timestamp, data.data, data.source);
+        if (printf("%s: %f  [%d]\n", timestamp, data.data, data.source) < 0) return -1;
     }
     else {
         data.source = 0;
-        printf("%s: %f\n", timestamp, data.data);
+        if (printf("%s: %f\n", timestamp, data.data) < 0) return -1;
     }
 
     if (currentStatus & USING_BINARY) {
-        write(binFd, (void*)&data, sizeof(data));
+        ERROR_CHECK(write(binFd, (void*)&data, sizeof(data)));
     }
 
     return 0;
@@ -105,16 +104,12 @@ int saveData(Data data, int currentStatus, struct timespec refTs) {
 int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, struct timespec *currTs, int commandSignal) {
     if (commandFlags == 0) {
         resetStatusFlags(currentStatus);
-        *prevTs = *currTs;
     }
     else if (commandFlags == 255) {
         union sigval sigval = {.sival_int = *currentStatus};
-        sigqueue(infoPid, commandSignal, sigval);
+        sigqueue(infoPid, commandSignal, sigval); // not checking if successed on purpose
     }
     else {
-        if (*currentStatus != NOT_WORKING) {
-            *prevTs = *currTs;
-        }
         commandFlags -= 1;
         resetStatusFlags(currentStatus);
         *currentStatus |= WORKING;
@@ -134,16 +129,18 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
         if (commandFlags & PREV_REF_POINT) {
             *currentStatus |= USING_REF_POINT;
             createdRefPoint = 1;
-            if (prevTs->tv_sec != 0 || prevTs->tv_nsec != 0) {
-                *currTs = *prevTs;
-            }
-            else {
-                clock_gettime(CLOCK_MONOTONIC, currTs);
+            struct timespec temp = *prevTs;
+            *prevTs = *currTs;
+            *currTs = temp;
+
+            if (currTs->tv_sec == 0 && currTs->tv_nsec == 0) {
+                ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, currTs));
             }
         }
         if (commandFlags & NEW_REF_POINT && !createdRefPoint) {
             *currentStatus |= USING_REF_POINT;
-            clock_gettime(CLOCK_MONOTONIC, currTs);
+            *prevTs = *currTs;
+            ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, currTs));
         }
     }
     return 0;

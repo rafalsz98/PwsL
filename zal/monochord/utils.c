@@ -10,13 +10,11 @@ int StringToInt(char *string, int *wasErr) {
     char *endptr = NULL;
     errno = 0;
     int val = strtol(string, &endptr, 10);
-    if ((errno == ERANGE && val == LONG_MAX)
-        || val == LONG_MIN
+    if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
         || (errno != 0 && val == 0)
         || endptr == string
         || *endptr != 0
-            )
-    {
+    ) {
         *wasErr = -1;
     }
     return val;
@@ -27,13 +25,11 @@ double StringToDouble(char *string, int *wasErr) {
     char *endptr = NULL;
     errno = 0;
     double val = strtod(string, &endptr);
-    if ((errno == ERANGE && val == FLT_MAX)
-        || val == FLT_MIN
+    if ((errno == ERANGE && (val == FLT_MAX || val == FLT_MIN))
         || (errno != 0 && val == 0)
         || endptr == string
         || *endptr != 0
-            )
-    {
+    ) {
         *wasErr = 1;
     }
     return val;
@@ -43,13 +39,11 @@ int parseParameters(int argc, char* argv[], in_port_t* port) {
     if (argc != 2) return -1;
     int wasErr = 0;
     *port = StringToInt(argv[1], &wasErr);
-
-    if (*port < 0 || *port > 65535) wasErr = 1;
-
     return wasErr;
 }
 
 int setupUDP(in_port_t port) {
+    errno = 0;
     int udpFd;
     ERROR_CHECK(udpFd = socket(AF_INET, SOCK_DGRAM, 0));
 
@@ -61,9 +55,6 @@ int setupUDP(in_port_t port) {
 
     // bind
     ERROR_CHECK(bind(udpFd, (const struct sockaddr*)&sockaddrIn, sizeof(struct sockaddr_in)));
-
-    // Listen
-    listen(udpFd, MAX_UDP_CONNECTIONS);
 
     return udpFd;
 }
@@ -98,7 +89,7 @@ int stopTimer(timer_t timerId) {
 
 int isActive(timer_t timerId) {
     struct itimerspec tsLeft = {0};
-    timer_gettime(timerId, &tsLeft);
+    ERROR_CHECK(timer_gettime(timerId, &tsLeft));
     return
         (tsLeft.it_value.tv_sec > 0 || tsLeft.it_value.tv_nsec > 0) ||
         (tsLeft.it_interval.tv_sec != 0 || tsLeft.it_interval.tv_nsec != 0);
@@ -112,6 +103,7 @@ int setupSigset(sigset_t* emptySet, sigset_t* maskSet, int maskedSignal) {
 }
 
 int sendResultSignal(Commands* commands, struct timespec* startTs, timer_t probeTimer, timer_t periodTimer) {
+    errno = 0;
     int wasErr = 0;
     if (kill(commands->pid, 0) == -1) {
         wasErr = 1;
@@ -131,11 +123,11 @@ int sendResultSignal(Commands* commands, struct timespec* startTs, timer_t probe
     }
 
     struct timespec tsNow = {0};
-    clock_gettime(CLOCK_MONOTONIC, &tsNow);
+    ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, &tsNow));
     float x = tsNow.tv_sec - startTs->tv_sec + (tsNow.tv_nsec - startTs->tv_nsec) / 1e9;
     float y = commands->amp * sin(2 * M_PI * commands->freq * x);
     union sigval sigval = {0};
-    printf("val: %f\n", y);
+
     memcpy(&sigval, &y, sizeof(float));
     ERROR_CHECK(sigqueue(commands->pid, commands->rt, sigval));
     lastSendSuccessfulPID = 1;
@@ -163,22 +155,23 @@ int getLastStringCharacter(char* string) {
     return i;
 }
 
-void resetTimer(timer_t timer, float time, int isOneTime) {
+int resetTimer(timer_t timer, float time, int isOneTime) {
     long seconds = time;
     long nanoseconds = (time - seconds) * 1e9;
-    launchTimer(timer, seconds, nanoseconds, isOneTime);
+    ERROR_CHECK(launchTimer(timer, seconds, nanoseconds, isOneTime));
+    return 0;
 }
 
 // --------------------------------------
 
-int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t periodTimer, struct timespec* ts)
-{
+int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t periodTimer, struct timespec* ts) {
+    errno = 0;
     struct sockaddr_in sockaddrIn = {0};
     socklen_t addrlen = sizeof(sockaddrIn);
     char buffer[UDP_BUFFER_SIZE] = {0};
     int size = 0;
     ERROR_CHECK(size = recvfrom(udpFd, buffer, sizeof(buffer), MSG_WAITALL, (struct sockaddr*)&sockaddrIn, &addrlen));
-    if (size >= UDP_BUFFER_SIZE) {
+    if (size >= UDP_BUFFER_SIZE - 1) {
         const char message[] = "Your command might have exceeded maximum length, try again with less characters!\n";
         sendto(udpFd, message, sizeof(message), 0, (const struct sockaddr*)&sockaddrIn, addrlen);
     }
@@ -211,14 +204,14 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
             float value = (float)StringToDouble(stringValue, &err);
             if (err) continue;
             commands->amp = value;
-            clock_gettime(CLOCK_MONOTONIC, ts);
+            ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, ts));
         }
         else if (!strcmp(command, "freq")) {
             int err = 0;
             float value = (float)StringToDouble(stringValue, &err);
             if (err) continue;
             commands->freq = value;
-            clock_gettime(CLOCK_MONOTONIC, ts);
+            ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, ts));
         }
         else if (!strcmp(command, "probe")) {
             int err = 0;
@@ -230,7 +223,7 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
                 (commands->period > 0 && isActive(periodTimer)) ||
                 commands->period == 0
             ) {
-                resetTimer(probeTimer, value, 0);
+                ERROR_CHECK(resetTimer(probeTimer, value, 0));
             }
         }
         else if (!strcmp(command, "period")) {
@@ -240,17 +233,17 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
             if (err) continue;
             commands->period = value;
             if (value < 0) {
-                stopTimer(periodTimer);
-                stopTimer(probeTimer);
+                ERROR_CHECK(stopTimer(periodTimer));
+                ERROR_CHECK(stopTimer(probeTimer));
             }
             else if (value == 0) {
-                stopTimer(periodTimer);
-                resetTimer(probeTimer, commands->probe, 0);
+                ERROR_CHECK(stopTimer(periodTimer));
+                ERROR_CHECK(resetTimer(probeTimer, commands->probe, 0));
                 probingStopped = 0;
             }
             else {
-                resetTimer(periodTimer, value, 1);
-                resetTimer(probeTimer, commands->probe, 0);
+                ERROR_CHECK(resetTimer(periodTimer, value, 1));
+                ERROR_CHECK(resetTimer(probeTimer, commands->probe, 0));
                 probingStopped = 0;
             }
         }
@@ -262,8 +255,9 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
             if (!lastSendSuccessfulPID) {
                 if (commands->period >= 0) {
                     if (commands->period != 0)
-                        resetTimer(periodTimer, commands->period, 1);
-                    resetTimer(probeTimer, commands->probe, 0);
+                        ERROR_CHECK(resetTimer(periodTimer, commands->period, 1));
+                    ERROR_CHECK(resetTimer(probeTimer, commands->probe, 0));
+                    probingStopped = 0;
                 }
             }
         }
@@ -275,8 +269,9 @@ int parseCommand(int udpFd, Commands* commands, timer_t probeTimer, timer_t peri
             if (!lastSendSuccessfulRT) {
                 if (commands->period >= 0) {
                     if (commands->period != 0)
-                        resetTimer(periodTimer, commands->period, 1);
-                    resetTimer(probeTimer, commands->probe, 0);
+                        ERROR_CHECK(resetTimer(periodTimer, commands->period, 1));
+                    ERROR_CHECK(resetTimer(probeTimer, commands->probe, 0));
+                    probingStopped = 0;
                 }
             }
         }

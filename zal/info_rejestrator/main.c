@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
         if (returnStatus & USING_REF_POINT) printf("IS USING REFERENCE POINT\n");
         if (returnStatus & USING_SOURCE_ID) printf("IS USING SOURCE IDENTIFICATION\n");
         if (returnStatus & USING_BINARY) printf("IS USING BINARY FORMAT\n");
-        if (returnStatus == NOT_WORKING) printf("IS NOT WORKING\n");
+        if (returnStatus == NOT_WORKING || returnStatus == USING_BINARY) printf("IS NOT WORKING\n");
         exit(EXIT_SUCCESS);
     }
     printf("Didn't receive any reply!\n");
@@ -81,13 +81,11 @@ int StringToInt(char *string, int *wasErr) {
     char *endptr = NULL;
     errno = 0;
     int val = strtol(string, &endptr, 10);
-    if ((errno == ERANGE && val == LONG_MAX)
-        || val == LONG_MIN
+    if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
         || (errno != 0 && val == 0)
         || endptr == string
         || *endptr != 0
-            )
-    {
+    ) {
         *wasErr = -1;
     }
     return val;

@@ -8,7 +8,6 @@ volatile Data lastData = {0};
 volatile sig_atomic_t signalFlag = 0;
 volatile int commandFlags = 0;
 volatile pid_t infoPid = 0;
-int currentStatus = NOT_WORKING;
 
 void setupApp(char* pathToBinary, char* pathToText, int dataSignal, int commandSignal, sigset_t* emptySet, sigset_t* maskSet);
 void dataHandler(int sig, siginfo_t *siginfo, void *ucontext);
@@ -17,6 +16,7 @@ void commandHandler(int sig, siginfo_t *siginfo, void *ucontext);
 
 
 int main(int argc, char* argv[]) {
+    int currentStatus = NOT_WORKING;
     int dataSignal, commandSignal;
     struct timespec currTs = {0}, prevTs = {0};
     char* pathToBinary = NULL;
@@ -29,24 +29,23 @@ int main(int argc, char* argv[]) {
 \t-c <int, no. of RealTime signal for commands\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    // debug only
-    printf("%d\n", getpid());
+    printf("Process PID is: %d\n", getpid());
 
     sigset_t emptySet, maskSet;
     setupApp(pathToBinary, pathToText, dataSignal, commandSignal, &emptySet, &maskSet);
 
     for (;;) {
         pause();
-        sigprocmask(SIG_SETMASK, &maskSet, NULL), "sigprocmask";
+        // Blokuję sygnały na cały okres, ponieważ gdyby w tym czasie przyszedł, nie zostałby poprawnie przetworzony. Dzięki temu zostaną one skolejkowane (RT)
+        ERROR_CHECK(sigprocmask(SIG_SETMASK, &maskSet, NULL), "sigprocmask");
         if (signalFlag == 0 && currentStatus & WORKING) {
             ERROR_CHECK(saveData(lastData, currentStatus, currTs), "saveData");
         }
         else if (signalFlag == 1) {
             ERROR_CHECK(parseCommand(&currentStatus, commandFlags, &prevTs, &currTs, commandSignal), "parseCommand")
         }
-        sigprocmask(SIG_SETMASK, &emptySet, NULL), "sigprocmask";
+        ERROR_CHECK(sigprocmask(SIG_SETMASK, &emptySet, NULL), "sigprocmask");
     }
-
     exit(EXIT_FAILURE);
 }
 
@@ -65,11 +64,11 @@ void commandHandler(int sig, siginfo_t *siginfo, void *ucontext) {
 void setupApp(char* pathToBinary, char* pathToText, int dataSignal, int commandSignal, sigset_t* emptySet, sigset_t* maskSet) {
     // Setup descriptors
     if (pathToBinary){
-        ERROR_CHECK(binFd = open(pathToBinary, O_WRONLY | O_APPEND | O_CREAT | O_TRUNC, 0666), "open");
+        ERROR_CHECK(binFd = open(pathToBinary, O_WRONLY | O_APPEND | O_CREAT | O_TRUNC, 0666), "open"); // O_TRUNC will be ignored if file is not regular
     }
     if (pathToText) {
         ERROR_CHECK(textFd = open(pathToText, O_WRONLY | O_APPEND | O_CREAT | O_TRUNC, 0666), "open");
-        dup2(textFd, STDOUT_FILENO);
+        ERROR_CHECK(dup2(textFd, STDOUT_FILENO), "dup2"); // Writing will work with printf
     }
     else textFd = STDOUT_FILENO;
 
