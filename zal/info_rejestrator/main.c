@@ -16,6 +16,7 @@ int StringToInt(char *string, int *wasErr);
 void signalHandler(int sig, siginfo_t *siginfo, void *ucontext);
 
 volatile sig_atomic_t returnStatus = 0;
+volatile sig_atomic_t wasSignal = 0;
 
 int main(int argc, char* argv[]) {
     int signalNo, pid;
@@ -36,9 +37,13 @@ int main(int argc, char* argv[]) {
 
     union sigval sigval = {.sival_int = 255};
     ERROR_CHECK(sigqueue(pid, signalNo, sigval), "sigqueue");
-    errno = 0;
-    if (nanosleep(&ts, NULL) == -1 && errno == EINTR) {
-        sigprocmask(SIG_SETMASK, &maskSet, NULL);
+
+    // Sometimes signal arrives faster than nanosleep is called, that's why there is if
+    if (!wasSignal) {
+        nanosleep(&ts, NULL);
+    }
+
+    if (wasSignal) {
         printf("Received reply\n");
         if (returnStatus & WORKING) printf("IS WORKING\n");
         if (returnStatus & USING_REF_POINT) printf("IS USING REFERENCE POINT\n");
@@ -47,6 +52,7 @@ int main(int argc, char* argv[]) {
         if (returnStatus == NOT_WORKING || returnStatus == USING_BINARY) printf("IS NOT WORKING\n");
         exit(EXIT_SUCCESS);
     }
+
     printf("Didn't receive any reply!\n");
     exit(EXIT_FAILURE);
 }
@@ -54,6 +60,7 @@ int main(int argc, char* argv[]) {
 
 void signalHandler(int sig, siginfo_t *siginfo, void *ucontext) {
     returnStatus = siginfo->si_value.sival_int;
+    wasSignal = 1;
 }
 
 int parseParameters(int argc, char* argv[], int* signalNo, int* pid) {
