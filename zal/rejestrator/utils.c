@@ -5,7 +5,7 @@
 int StringToInt(char *string, int *wasErr) {
     char *endptr = NULL;
     errno = 0;
-    int val = strtol(string, &endptr, 10);
+    long val = strtol(string, &endptr, 10);
     if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
         || (errno != 0 && val == 0)
         || endptr == string
@@ -13,7 +13,7 @@ int StringToInt(char *string, int *wasErr) {
     ) {
         *wasErr = -1;
     }
-    return val;
+    return (int)val;
 }
 
 int parseParameters(int argc, char **argv, char **pathToBinary, char **pathToText, int *dataSignal, int *commandSignal) {

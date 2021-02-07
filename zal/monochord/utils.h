@@ -4,8 +4,6 @@
 #define _XOPEN_SOURCE 500
 #define _POSIX_C_SOURCE 199309
 #define _GNU_SOURCE
-#include <sys/prctl.h>
-#include <ftw.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,9 +15,6 @@
 #include <sys/types.h>
 #include <time.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <alloca.h>
-#include <sys/wait.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

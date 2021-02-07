@@ -33,6 +33,7 @@ int main(int argc, char* argv[]) {
 
     sigset_t emptySet, maskSet;
     setupApp(pathToBinary, pathToText, dataSignal, commandSignal, &emptySet, &maskSet);
+    if (binFd != -1) currentStatus |= USING_BINARY;
 
     for (;;) {
         pause();
