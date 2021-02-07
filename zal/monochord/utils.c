@@ -115,7 +115,7 @@ int sendResultSignal(Commands* commands, struct timespec* startTs, timer_t probe
     }
 
     if (wasErr) {
-        printf("Stopped simulation\n");
+        printf("Stopped sending data\n");
         stopTimer(probeTimer);
         stopTimer(periodTimer);
         probingStopped = 1;
