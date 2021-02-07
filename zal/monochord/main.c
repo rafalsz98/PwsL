@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
         ssize_t rec;
         if ((rec = recvfrom(udpFd, buffer, sizeof(buffer), MSG_PEEK, NULL, NULL) == -1) && errno == EINTR) {
             // Interruped by signal, check type
-            sigprocmask(SIG_SETMASK, &maskSet, NULL);
+            ERROR_CHECK(sigprocmask(SIG_SETMASK, &maskSet, NULL), "sigprocmask");
             if (signalFlag == 0) { // probe timer
                 ERROR_CHECK(sendResultSignal(&commands, &ts, probeTimer, periodTimer), "sendResultSignal");
             }
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
                 probingStopped = 1;
                 periodExecution = 0;
             }
-            sigprocmask(SIG_SETMASK, &emptySet, NULL);
+            ERROR_CHECK(sigprocmask(SIG_SETMASK, &emptySet, NULL), "sigprocmask");
         }
         else if (rec == -1) {
             perror("recvfrom");
@@ -48,9 +48,9 @@ int main(int argc, char* argv[]) {
         }
         else {
             // UDP socket has some command
-            sigprocmask(SIG_SETMASK, &maskSet, NULL);
+            ERROR_CHECK(sigprocmask(SIG_SETMASK, &maskSet, NULL), "sigprocmask");
             ERROR_CHECK(parseCommand(udpFd, &commands, probeTimer, periodTimer, &ts), "parseCommand");
-            sigprocmask(SIG_SETMASK, &emptySet, NULL);
+            ERROR_CHECK(sigprocmask(SIG_SETMASK, &emptySet, NULL), "sigprocmask");
         }
 
     }
