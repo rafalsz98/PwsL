@@ -23,6 +23,11 @@
 #include <math.h>
 #include <ctype.h>
 
+#define TIMESTAMP_MAX 128
+#define MESSAGE_MAX 256
+
+#define ERROR_CHECK(func, string) if((func)==-1){perror(string);exit(EXIT_FAILURE);}
+
 typedef struct DataStruct {
     struct timespec ts;
     float data;

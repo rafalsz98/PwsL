@@ -8,7 +8,7 @@
 
 int main(int argc, char* argv[]) {
     if (argc != 4) {
-        printf("pid sig val\n");
+        printf("Usage: %s PID rt_signal value\n");
     }
     int pid = atoi(argv[1]);
     int sig = atoi(argv[2]);

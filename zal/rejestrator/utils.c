@@ -1,7 +1,5 @@
 #include "utils.h"
 
-#define ERROR_CHECK(func) if((func)==-1){return -1;}
-
 int StringToInt(char *string, int *wasErr) {
     char *endptr = NULL;
     errno = 0;
@@ -53,7 +51,7 @@ void resetStatusFlags(int* currentStatus) {
 }
 
 int saveData(Data data, int currentStatus, struct timespec refTs) {
-    char timestamp[256] = {0};
+    char timestamp[TIMESTAMP_MAX] = {0};
     if (currentStatus & USING_REF_POINT) {
         struct timespec currTs = {0};
         clock_gettime(CLOCK_MONOTONIC, &currTs);
@@ -73,29 +71,31 @@ int saveData(Data data, int currentStatus, struct timespec refTs) {
         delta.tv_sec -= (minutes * 60);
         int seconds = delta.tv_sec;
         int miliseconds = delta.tv_nsec / 1e6;
-        snprintf(timestamp, 256, "[%02d:%02d:%02d.%03d]", hour, minutes, seconds, miliseconds);
+        ERROR_CHECK(snprintf(timestamp, TIMESTAMP_MAX, "[%02d:%02d:%02d.%03d]", hour, minutes, seconds, miliseconds), "snprintf");
     }
     else {
         clock_gettime(CLOCK_REALTIME, &(data.ts));
         struct tm* tm = localtime(&(data.ts.tv_sec));
         int miliseconds = data.ts.tv_nsec / 1e6;
-        snprintf(timestamp, 256, "[%02d/%02d/%d %02d:%02d:%02d.%03d]",
+        ERROR_CHECK(snprintf(timestamp, TIMESTAMP_MAX, "[%02d/%02d/%d %02d:%02d:%02d.%03d]",
                  tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900,
                  tm->tm_hour, tm->tm_min, tm->tm_sec, miliseconds
-        );
+        ), "snprintf");
     }
 
+    char message[MESSAGE_MAX] = {0};
+
     if (currentStatus & USING_SOURCE_ID) {
-        // Can print to file thanks to dup2
-        if (printf("%s: %f  [%d]\n", timestamp, data.data, data.source) < 0) return -1;
+        ERROR_CHECK(snprintf(message, MESSAGE_MAX, "%s: %f  [%d]\n", timestamp, data.data, data.source), "snprintf");
     }
     else {
         data.source = 0;
-        if (printf("%s: %f\n", timestamp, data.data) < 0) return -1;
+        ERROR_CHECK(snprintf(message, MESSAGE_MAX, "%s: %f\n", timestamp, data.data), "snprintf");
     }
+    ERROR_CHECK(write(textFd, (void*)message, strlen(message)), "write to text file");
 
     if (currentStatus & USING_BINARY) {
-        ERROR_CHECK(write(binFd, (void*)&data, sizeof(data)));
+        ERROR_CHECK(write(binFd, (void*)&data, sizeof(data)), "write to binary file");
     }
 
     return 0;
@@ -118,10 +118,19 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
         if (commandFlags & TRUNCATE) {
             errno = 0;
             if (*currentStatus & USING_BINARY) {
-                if (ftruncate(binFd, 0) == -1 && errno != EINVAL) return -1;
+                if (ftruncate(binFd, 0) == -1 && errno != EINVAL) {
+                    perror("ftruncate");
+                    exit(EXIT_FAILURE);
+                }
                 errno = 0;
+                ERROR_CHECK(lseek(binFd, 0 , SEEK_SET), "lseek");
             }
-            if (ftruncate(textFd, 0) == -1 && errno != EINVAL) return -1;
+            if (ftruncate(textFd, 0) == -1 && errno != EINVAL) {
+                perror("ftruncate");
+                exit(EXIT_FAILURE);
+            }
+            errno = 0;
+            ERROR_CHECK(lseek(textFd, 0 , SEEK_SET), "lseek");
         }
         if (commandFlags & USE_SOURCE_ID) {
             *currentStatus |= USING_SOURCE_ID;
@@ -134,13 +143,13 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
             *currTs = temp;
 
             if (currTs->tv_sec == 0 && currTs->tv_nsec == 0) {
-                ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, currTs));
+                ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, currTs), "clock_gettime");
             }
         }
         if (commandFlags & NEW_REF_POINT && !createdRefPoint) {
             *currentStatus |= USING_REF_POINT;
             *prevTs = *currTs;
-            ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, currTs));
+            ERROR_CHECK(clock_gettime(CLOCK_MONOTONIC, currTs), "clock_gettime");
         }
     }
     return 0;
