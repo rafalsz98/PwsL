@@ -123,14 +123,20 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
                     exit(EXIT_FAILURE);
                 }
                 errno = 0;
-                ERROR_CHECK(lseek(binFd, 0 , SEEK_SET), "lseek");
+                if (lseek(binFd, 0 , SEEK_SET) == -1 && errno != ESPIPE) {
+                    perror("lseek");
+                    exit(EXIT_FAILURE);
+                }
             }
             if (ftruncate(textFd, 0) == -1 && errno != EINVAL) {
                 perror("ftruncate");
                 exit(EXIT_FAILURE);
             }
             errno = 0;
-            ERROR_CHECK(lseek(textFd, 0 , SEEK_SET), "lseek");
+            if (textFd != STDOUT_FILENO && lseek(textFd, 0 , SEEK_SET) == -1 && errno != ESPIPE) {
+                perror("lseek");
+                exit(EXIT_FAILURE);
+            }
         }
         if (commandFlags & USE_SOURCE_ID) {
             *currentStatus |= USING_SOURCE_ID;
