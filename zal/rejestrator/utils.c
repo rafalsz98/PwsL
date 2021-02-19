@@ -127,6 +127,7 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
                     perror("lseek");
                     exit(EXIT_FAILURE);
                 }
+                errno = 0;
             }
             if (ftruncate(textFd, 0) == -1 && errno != EINVAL) {
                 perror("ftruncate");
