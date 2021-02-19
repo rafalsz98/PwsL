@@ -123,7 +123,7 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
                     exit(EXIT_FAILURE);
                 }
                 errno = 0;
-                lseek(binFd, 0 , SEEK_SET)
+                lseek(binFd, 0 , SEEK_SET);
             }
             if (ftruncate(textFd, 0) == -1 && errno != EINVAL) {
                 perror("ftruncate");
@@ -131,7 +131,7 @@ int parseCommand(int *currentStatus, int commandFlags, struct timespec *prevTs, 
             }
             errno = 0;
             if (textFd != STDOUT_FILENO) {
-                lseek(textFd, 0 , SEEK_SET)
+                lseek(textFd, 0 , SEEK_SET);
             }
         }
         if (commandFlags & USE_SOURCE_ID) {
